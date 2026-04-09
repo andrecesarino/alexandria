@@ -2,8 +2,16 @@ import os
 from mcp.server.fastmcp import FastMCP
 from pypdf import PdfReader
 
+# Imports adicionados (Fase 2)
+from ai_manager import extrair_nome_evento, gerar_mensagem_coordenadoria
+from excel_manager import ler_destinatarios, inserir_novo_evento
+from telegram_bot import iniciar_bot_threads, enviar_mensagem_sync
+
 # Inicializa o servidor MCP
 mcp = FastMCP("Alexandria_Agent_Skills")
+
+# Inicia a Thread global do Telegram Bot que ficará escutando comandos (Fase 2)
+iniciar_bot_threads()
 
 ENTRADA_DIR = os.path.join(os.path.dirname(__file__), "entrada")
 RESUMOS_DIR = os.path.join(os.path.dirname(__file__), "resumos")
@@ -57,6 +65,50 @@ def salvar_resumo_evento(nome_arquivo: str, resumo: str) -> str:
         return f"Resumo salvo com sucesso em: {filepath}"
     except Exception as e:
         return f"Erro ao salvar resumo: {str(e)}"
+
+@mcp.tool()
+def delegar_tarefas_evento(nome_arquivo_resumo: str) -> str:
+    """Ferramenta que lê um resumo de evento processado, extrai seu nome (via IA), e dispara as mensagens de delegação de tarefas de acordo com destinatarios.xlsx via Telegram. Também cria/atualiza os registros na planilha de eventos."""
+    
+    filepath = os.path.join(RESUMOS_DIR, nome_arquivo_resumo)
+    if not os.path.exists(filepath):
+        return f"Erro: Arquivo '{nome_arquivo_resumo}' não encontrado em resumos/."
+        
+    try:
+        with open(filepath, "r", encoding="utf-8") as f:
+            resumo_texto = f.read()
+    except Exception as e:
+        return f"Erro ao ler resumo: {str(e)}"
+        
+    print("Processando inteligência para extrair informações do evento...")
+    nome_evento = extrair_nome_evento(resumo_texto)
+    print(f"Nome extraído: {nome_evento}")
+    
+    # 1. Recuperar destinatarios
+    destinatarios = ler_destinatarios()
+    if not destinatarios:
+        return "Erro: Planilha destinatarios.xlsx não encontrada ou está vazia."
+        
+    # 2. Inserir em eventos.xlsx
+    coordenadorias = list(destinatarios.keys())
+    inserir_novo_evento(nome_evento, coordenadorias)
+    
+    # 3. Formatar e disparar mensagens para cada Coordenadoria
+    relatorios = []
+    for coord, base_msg in destinatarios.items():
+        mensagem_final = gerar_mensagem_coordenadoria(nome_evento, base_msg, resumo_texto)
+        enviado = enviar_mensagem_sync(coord, mensagem_final)
+        if enviado:
+            relatorios.append(f"✅ {coord} (Enviado com sucesso)")
+        else:
+            relatorios.append(f"❌ {coord} (Falhou: Chat ID não registrado via bot)")
+            
+    resultado = (
+        f"Delegação Concluída para o evento '{nome_evento}'.\n"
+        f"Acompanhamento registrado em eventos.xlsx!\n\nStatus de Envio:\n" +
+        "\n".join(relatorios)
+    )
+    return resultado
 
 if __name__ == "__main__":
     mcp.run()
