@@ -1,0 +1,6 @@
+destinatarios/destinatarios.xlsx
+destinatarios/eventos.xlsx
+config/telegram_chats.json
+entrada/processados/*
+resumos/*
+apiconfig.txt

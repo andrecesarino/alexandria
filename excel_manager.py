@@ -17,13 +17,34 @@ def ler_destinatarios():
         print(f"Erro ao ler destinatarios: {e}")
         return {}
 
-def inserir_novo_evento(nome_evento: str, coordenadorias: list):
-    """Insere o evento na eventos.xlsx, zerado como Em Andamento."""
+def gerar_proximo_id() -> str:
+    """Inspeciona a planilha de eventos para encontrar o próximo ID 6-digits válido sequêncialmente."""
+    base_inicial = 100001
+    if not os.path.exists(EVENTOS_PATH):
+        return str(base_inicial)
+        
+    try:
+        df = pd.read_excel(EVENTOS_PATH)
+        if df.empty or "ID" not in df.columns:
+            return str(base_inicial)
+            
+        valores = pd.to_numeric(df["ID"], errors='coerce').dropna()
+        if len(valores) > 0:
+            proximo = int(valores.max()) + 1
+            return f"{proximo:06d}"
+        else:
+            return str(base_inicial)
+    except Exception as e:
+        print(f"Erro buscando ID sequencial: {e}")
+        return str(base_inicial)
+
+def inserir_novo_evento(id_evento: str, nome_evento: str, coordenadorias: list):
+    """Insere o evento na eventos.xlsx, zerado como Em Andamento, contendo seu ID."""
     # Carrega ou cria do zero
     if os.path.exists(EVENTOS_PATH):
         df = pd.read_excel(EVENTOS_PATH)
     else:
-        colunas = ["Evento"] + coordenadorias
+        colunas = ["ID", "Evento"] + coordenadorias
         df = pd.DataFrame(columns=colunas)
         
     # Garante que as colunas das coodenadorias existem nessa DF
@@ -31,7 +52,7 @@ def inserir_novo_evento(nome_evento: str, coordenadorias: list):
         if c not in df.columns:
             df[c] = "-"
             
-    novo_registro = {"Evento": nome_evento}
+    novo_registro = {"ID": id_evento, "Evento": nome_evento}
     for coord in coordenadorias:
         novo_registro[coord] = "Em Andamento"
         
@@ -45,16 +66,16 @@ def inserir_novo_evento(nome_evento: str, coordenadorias: list):
         print(f"Erro ao salvar eventos.xlsx: {e}")
         return False
 
-def atualizar_status_evento(nome_evento: str, coordenadoria: str, status: str = "Concluído"):
+def atualizar_status_evento(referencia: str, coordenadoria: str, status: str = "Concluído"):
     """
-    Atualiza eventos.xlsx para uma coordenadoria específica de um evento via Bot.
+    Atualiza eventos.xlsx para uma coordenadoria específica de um evento via Bot. Aceita NOME ou ID.
     """
     if not os.path.exists(EVENTOS_PATH):
         return False
         
     try:
         df = pd.read_excel(EVENTOS_PATH)
-        mask = df["Evento"].astype(str).str.strip().str.lower() == nome_evento.strip().lower()
+        mask = (df["Evento"].astype(str).str.strip().str.lower() == referencia.strip().lower()) | (df["ID"].astype(str).str.strip() == referencia.strip())
         
         if mask.any():
             if coordenadoria in df.columns:

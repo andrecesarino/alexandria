@@ -8,7 +8,7 @@ from excel_manager import atualizar_status_evento
 CONFIG_CHATS = os.path.join(os.path.dirname(__file__), "config", "telegram_chats.json")
 
 def _get_bot_token():
-    config_path = os.path.join(os.path.dirname(__file__), "config")
+    config_path = os.path.join(os.path.dirname(__file__), "api_config.txt")
     if os.path.exists(config_path):
         with open(config_path, "r", encoding="utf-8") as f:
             for line in f:
@@ -43,10 +43,11 @@ async def registrar_handler(update, context):
 
 async def concluir_handler(update, context):
     if not context.args:
-        await update.message.reply_text("Informe o nome exato do evento. Ex: /concluir Seminário de Saúde Local")
+        await update.message.reply_text("Informe o nome exato do evento ou seu ID de 6 dígitos. Ex: /concluir 159345")
         return
         
-    nome_evento = " ".join(context.args)
+    # Extrai o nome do evento ou ID do argumento
+    referencia = " ".join(context.args)
     chat_id = update.message.chat_id
     chats = ler_chats()
     
@@ -60,11 +61,11 @@ async def concluir_handler(update, context):
         await update.message.reply_text("⚠️ Você não está registrado como nenhuma Coordenadoria. Use /registrar")
         return
         
-    sucesso = atualizar_status_evento(nome_evento, encontrada, "Concluído")
+    sucesso = atualizar_status_evento(referencia, encontrada, "Concluído")
     if sucesso:
-        await update.message.reply_text(f"☑️ Status atualizado! Tarefa de {encontrada} no evento '{nome_evento}' foi marcada como Concluída.")
+        await update.message.reply_text(f"☑️ Status atualizado! Tarefa de {encontrada} atrelada ao evento '{referencia}' foi marcada como Concluída.")
     else:
-        await update.message.reply_text(f"❌ Não foi possível encontrar o evento '{nome_evento}' em andamento ou a sua coordenadoria não está listada para ele.")
+        await update.message.reply_text(f"❌ Não foi possível encontrar o evento ligado ao ID/Nome '{referencia}'.")
 
 def start_bot_blocking():
     token = _get_bot_token()
